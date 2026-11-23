@@ -1,0 +1,15 @@
+services:
+  framedock:
+    container_name: framedock
+    build: .
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "${FRAMEDOCK_BIND_IP:-127.0.0.1}:${FRAMEDOCK_PORT:-9637}:80"
+      - "${FRAMEDOCK_BIND_IP:-127.0.0.1}:9640-9659:9640-9659"
+    volumes:
+      - framedock-data:/data
+
+volumes:
+  framedock-data:

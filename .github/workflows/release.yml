@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify and publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify version and source
+        run: |
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Use a stable version tag such as v0.1.0."
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD origin/main
+          docker compose -f compose.dev.yml config --quiet
+
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and smoke-test both platforms
+        run: |
+          for platform in linux/amd64 linux/arm64; do
+            docker buildx build --platform "$platform" --load --tag framedock:release-check .
+            bash scripts/smoke-test.sh framedock:release-check "$platform"
+          done
+
+      - name: Set image tags
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          test "$(docker compose -f compose.yml config --images)" = "$image:latest"
+          echo "RELEASE_IMAGE=$image:$VERSION" >> "$GITHUB_ENV"
+          echo "RELEASE_LATEST_IMAGE=$image:latest" >> "$GITHUB_ENV"
+
+      - name: Archive corresponding source
+        run: git archive --format=tar.gz --prefix="framedock-$VERSION/" --output="$RUNNER_TEMP/framedock-source.tar.gz" HEAD
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the versioned Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.RELEASE_IMAGE }}
+            ${{ env.RELEASE_LATEST_IMAGE }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-only
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.description=Corresponding source: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/framedock-source.tar.gz
+
+      - name: Publish the GitHub release and generate notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          changelog=(--generate-notes)
+
+          if [[ "$VERSION" == "v1.0.0" ]]; then
+            cat > "$notes" <<'EOF'
+          FrameDock is a lightweight, self-hosted tool for previewing websites, web apps and PWAs. Switch between projects and demo mobile and desktop layouts from one browser tab.
+
+          ## Highlights
+
+          - Switch between desktop, iPhone and Android previews.
+          - See changes as you save when your dev server supports live reload.
+          - Keep your project URLs and preferences between container updates.
+
+          ## Install
+
+          Download [`compose.yml`](https://github.com/XternA/framedock/releases/download/v1.0.0/compose.yml), then run this in the same folder:
+
+          ```sh
+          docker compose up -d
+          ```
+
+          Open [FrameDock on localhost](http://localhost:9637) and add your first project URL.
+          EOF
+            changelog=()
+          else
+            cat > "$notes" <<'EOF'
+          ## Install
+
+          Download `compose.yml` from the release assets and run this in the same folder:
+
+          ```sh
+          docker compose up -d
+          ```
+
+          Open [FrameDock on localhost](http://localhost:9637) and add your first project URL.
+          EOF
+          fi
+
+          gh release create "$VERSION" compose.yml "$RUNNER_TEMP/framedock-source.tar.gz" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "FrameDock $VERSION" \
+            --notes-file "$notes" "${changelog[@]}"
+
+      - name: Explain how to recover
+        if: failure()
+        run: |
+          {
+            echo "### Release did not complete"
+            echo "Open the first failed step in this run for the error."
+            echo "For a temporary runner or registry failure, rerun this workflow."
+            echo "For a code failure, fix it in a pull request, confirm CI, and create a new version tag."
+            echo "If the Docker image was published, rerun the release job after resolving the GitHub release error."
+          } >> "$GITHUB_STEP_SUMMARY"

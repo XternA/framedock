@@ -1,0 +1,10 @@
+**
+!LICENSE
+!bun.lock
+!package.json
+!tsconfig.json
+!*.ts
+!*.js
+!*.html
+!src/**
+!public/*

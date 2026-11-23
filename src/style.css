@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  .preview-return[data-theme="light"] {
+    color-scheme: light;
+    --surface: 255 255 255;
+    --stage: 250 246 237;
+    --text: 31 30 27;
+    --text-soft: 74 71 65;
+    --text-muted: 110 106 98;
+    --hover: 241 246 243;
+    --selection: 220 233 225;
+    --border: 185 211 196;
+    --selected-text: 26 53 41;
+  }
+
+  :root[data-theme="dark"],
+  .preview-return[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: 27 32 31;
+    --stage: 19 23 23;
+    --text: 235 240 237;
+    --text-soft: 205 218 211;
+    --text-muted: 162 176 168;
+    --hover: 41 50 46;
+    --selection: 46 65 56;
+    --border: 67 83 76;
+    --selected-text: 197 233 212;
+  }
+
+  .device-chrome {
+    --stage: 255 255 255;
+    --text: 31 30 27;
+  }
+
+
+  body { @apply bg-ivory text-charcoal antialiased; }
+  :focus-visible {
+    outline: 2px solid theme('colors.forest.500');
+    outline-offset: 2px;
+  }
+}
+
+.continuous-corners {
+  border-radius: var(--corner-radius);
+}
+
+@supports (clip-path: shape(from 0 0, line to 100% 100%, close)) {
+  .continuous-corners, .iphone-screen-trim {
+    --corner-depth: var(--corner-y, var(--corner-x));
+    --corner-right: calc(100% - var(--corner-x));
+    --corner-bottom: calc(100% - var(--corner-depth));
+    --corner-diagonal-x: calc(var(--corner-x) * .19);
+    --corner-diagonal-y: calc(var(--corner-depth) * .19);
+    --corner-control-x: calc(var(--corner-x) * .38);
+    --corner-control-y: calc(var(--corner-depth) * .38);
+    --corner-edge-x: calc(var(--corner-x) * .64);
+    --corner-edge-y: calc(var(--corner-depth) * .64);
+    /* Two mirrored curves meet at each diagonal and flatten into the straight edges. */
+    --corner-curve:
+      hline to var(--corner-right),
+      curve to calc(100% - var(--corner-diagonal-x)) var(--corner-diagonal-y)
+        with calc(100% - var(--corner-edge-x)) 0 / calc(100% - var(--corner-control-x)) 0,
+      curve to 100% var(--corner-depth) with 100% var(--corner-control-y) / 100% var(--corner-edge-y),
+      vline to var(--corner-bottom),
+      curve to calc(100% - var(--corner-diagonal-x)) calc(100% - var(--corner-diagonal-y))
+        with 100% calc(100% - var(--corner-edge-y)) / 100% calc(100% - var(--corner-control-y)),
+      curve to var(--corner-right) 100%
+        with calc(100% - var(--corner-control-x)) 100% / calc(100% - var(--corner-edge-x)) 100%,
+      hline to var(--corner-x),
+      curve to var(--corner-diagonal-x) calc(100% - var(--corner-diagonal-y))
+        with var(--corner-edge-x) 100% / var(--corner-control-x) 100%,
+      curve to 0 var(--corner-bottom)
+        with 0 calc(100% - var(--corner-control-y)) / 0 calc(100% - var(--corner-edge-y)),
+      vline to var(--corner-depth),
+      curve to var(--corner-diagonal-x) var(--corner-diagonal-y) with 0 var(--corner-edge-y) / 0 var(--corner-control-y),
+      curve to var(--corner-x) 0 with var(--corner-control-x) 0 / var(--corner-edge-x) 0,
+      close;
+  }
+  .continuous-corners {
+    clip-path: shape(from var(--corner-x) 0, var(--corner-curve));
+    border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-area,
+  .theme-chrome,
+  .theme-chrome :is(button, select),
+  .theme-flyout {
+    transition: background-color 180ms ease-out, color 180ms ease-out, border-color 180ms ease-out;
+  }
+
+  .theme-flyout:popover-open {
+    animation: open-project-editor 130ms ease-out;
+  }
+}
+
+@keyframes open-project-editor {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@layer base {
+  @supports (corner-shape: superellipse(1.35)) {
+    :where(.iphone-shell, .iphone-shell > div > .continuous-corners, .iphone-shell > [data-testid="hardware-buttons"] > span) {
+      corner-shape: superellipse(1.35);
+    }
+  }
+}
+
+@supports (clip-path: shape(evenodd from 0 0, hline to 100%, vline to 100%, close, move to 5px 5px, close)) {
+  .iphone-screen-trim {
+    background: #09090b;
+    clip-path: shape(evenodd from 0 0, hline to 100%, vline to 100%, hline to 0, close,
+      move to var(--corner-x) 0, var(--corner-curve));
+  }
+}
